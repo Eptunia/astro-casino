@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Admin — AstroCasino</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=Sora:wght@400;500;600&family=Poppins:wght@700;800;900&display=swap');
+
+  :root{
+    --bg:#0b0616;
+    --panel:#1a0f30;
+    --panel-2:#241640;
+    --line:#4a2f70;
+    --text:#f7f0ff;
+    --dim:#b7a3d6;
+    --gold:#ffd76a;
+    --gold-bright:#ffe9a8;
+    --royal:#a855f7;
+    --royal-bright:#c084fc;
+    --green:#22c55e;
+    --red:#ef4444;
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{
+    background:
+      radial-gradient(circle at 8% -5%, #2d1454 0%, transparent 42%),
+      radial-gradient(circle at 95% 10%, #3a2308 0%, transparent 40%),
+      radial-gradient(circle at 50% 100%, #3a0f42 0%, transparent 45%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Sora',-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+    min-height:100vh;
+  }
+  body{
+    display:flex; align-items:center; justify-content:center;
+    padding:24px;
+  }
+
+  .panel{
+    background:linear-gradient(180deg, var(--panel), var(--panel-2));
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:32px;
+    width:100%;
+    max-width:460px;
+    box-shadow:0 30px 80px -30px rgba(168,85,247,.45);
+  }
+
+  h1{
+    font-family:'Poppins','Space Grotesk',sans-serif;
+    font-weight:800; font-size:28px; letter-spacing:-.4px;
+    margin-bottom:6px;
+  }
+  h1 .a{
+    background:linear-gradient(90deg,#a855f7,#c084fc 55%,#e879f9);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  h1 .b{ color:#fff; }
+  h1 .admin{
+    font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+    color:var(--gold); margin-left:8px; vertical-align:middle;
+    border:1px solid rgba(255,215,106,.4); border-radius:999px; padding:3px 9px;
+  }
+  .sub{ color:var(--dim); font-size:13px; margin-bottom:28px; line-height:1.5; }
+
+  label{
+    display:block; font-size:11px; letter-spacing:1.2px; text-transform:uppercase;
+    color:var(--dim); font-weight:700; margin-bottom:8px; margin-top:18px;
+  }
+  label:first-of-type{ margin-top:0; }
+
+  input{
+    width:100%;
+    background:#0e0819;
+    border:1px solid #3a2a5c;
+    border-radius:10px;
+    padding:12px 14px;
+    color:var(--text);
+    font-family:"Courier New",monospace;
+    font-size:15px;
+    outline:none;
+    transition:border-color .2s ease;
+  }
+  input:focus{ border-color:var(--royal); }
+  input::placeholder{ color:#6f5f8c; }
+
+  button{
+    width:100%;
+    margin-top:24px;
+    background:var(--royal);
+    border:none;
+    color:#fff;
+    font-family:inherit;
+    font-weight:800;
+    font-size:14.5px;
+    padding:13px 20px;
+    border-radius:10px;
+    cursor:pointer;
+    transition:all .18s ease;
+  }
+  button:hover{ filter:brightness(1.12); box-shadow:0 0 18px rgba(168,85,247,.4); }
+  button:disabled{ opacity:.5; cursor:not-allowed; box-shadow:none; filter:none; }
+
+  button.secondary{
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--dim);
+    margin-top:10px;
+  }
+  button.secondary:hover{ color:var(--text); border-color:var(--royal); box-shadow:none; }
+
+  .msg{ margin-top:16px; font-size:13.5px; padding:12px 14px; border-radius:10px; display:none; line-height:1.45; }
+  .msg.show{ display:block; }
+  .msg.ok{ background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#7ee0a0; }
+  .msg.err{ background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#ff9b9b; }
+
+  .balance-preview{
+    margin-top:18px;
+    padding:14px 16px;
+    background:#160d26;
+    border:1px solid var(--line);
+    border-radius:12px;
+    font-size:14px;
+    display:none;
+  }
+  .balance-preview.show{ display:block; }
+  .balance-preview .num{
+    font-family:'Space Grotesk','Sora',sans-serif;
+    font-size:24px; font-weight:800; color:var(--gold-bright);
+  }
+  .balance-preview .player-row{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    margin-top:8px; padding-top:8px; border-top:1px solid var(--line);
+    font-size:13px; color:var(--dim);
+  }
+  .balance-preview .player-row .val{ color:var(--text); font-weight:700; word-break:break-all; text-align:right; }
+
+  #logoutBtn{ display:none; }
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <h1><span class="a">Astro</span><span class="b">Casino</span><span class="admin">Admin</span></h1>
+  <div class="sub">Panneau réservé — ajout et retrait de Coins par code boutique</div>
+
+  <!-- ---------- LOGIN ---------- -->
+  <div id="loginBox">
+    <label for="email">Email admin</label>
+    <input type="email" id="email" placeholder="toi@exemple.com" autocomplete="username">
+    <label for="password">Mot de passe</label>
+    <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+    <button id="loginBtn">Se connecter</button>
+    <div class="msg" id="loginMsg"></div>
+  </div>
+
+  <!-- ---------- ADMIN PANEL ---------- -->
+  <div id="adminBox" class="hidden">
+    <label for="codeInput">Code boutique (6 chiffres)</label>
+    <input type="text" id="codeInput" maxlength="6" placeholder="123456" inputmode="numeric" autocomplete="off">
+    <button class="secondary" id="lookupBtn">Vérifier le code</button>
+
+    <div class="balance-preview" id="balancePreview">
+      Solde actuel : <span class="num" id="currentBalance">—</span> Coins
+      <div class="player-row">
+        <span>Pseudo</span>
+        <span class="val" id="playerPseudo">—</span>
+      </div>
+    </div>
+
+    <label for="amountInput">Montant (ajout ou retrait)</label>
+    <input type="number" id="amountInput" placeholder="500" min="1" step="1">
+    <button id="addBtn">Ajouter les Coins</button>
+    <button class="secondary" id="removeBtn">Retirer les Coins</button>
+    <button class="secondary" id="logoutBtn">Se déconnecter</button>
+    <div class="msg" id="adminMsg"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  // Même projet Firebase que le casino (astro2.js)
+  firebase.initializeApp({
+    apiKey:            "AIzaSyA6OyTtCp_D8mv0AiA2owoyf0xqAvVytjE",
+    authDomain:        "astrocasino-26c30.firebaseapp.com",
+    projectId:         "astrocasino-26c30",
+    storageBucket:     "astrocasino-26c30.firebasestorage.app",
+    messagingSenderId: "658583796337",
+    appId:             "1:658583796337:web:c7186c05d46daf9f8239d0"
+  });
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+
+  const loginBox       = document.getElementById('loginBox');
+  const adminBox       = document.getElementById('adminBox');
+  const loginMsg       = document.getElementById('loginMsg');
+  const adminMsg       = document.getElementById('adminMsg');
+  const codeInput      = document.getElementById('codeInput');
+  const amountInput    = document.getElementById('amountInput');
+  const balancePreview = document.getElementById('balancePreview');
+  const currentBalance = document.getElementById('currentBalance');
+  const playerPseudo   = document.getElementById('playerPseudo');
+  const lookupBtn      = document.getElementById('lookupBtn');
+  const addBtn         = document.getElementById('addBtn');
+  const removeBtn      = document.getElementById('removeBtn');
+
+  // Compte joueur actuellement vérifié : { ref, code }
+  let verified = null;
+
+  const fmtN = n => Math.round(n || 0).toLocaleString('fr-FR');
+
+  function showMsg(el, text, ok){
+    el.textContent = text;
+    el.className = 'msg show ' + (ok ? 'ok' : 'err');
+  }
+
+  function resetVerified(){
+    verified = null;
+    balancePreview.classList.remove('show');
+  }
+
+  /* ---------------- CONNEXION ---------------- */
+  auth.onAuthStateChanged(user=>{
+    if(user){
+      loginBox.classList.add('hidden');
+      adminBox.classList.remove('hidden');
+      document.getElementById('logoutBtn').style.display = 'block';
+    } else {
+      loginBox.classList.remove('hidden');
+      adminBox.classList.add('hidden');
+      resetVerified();
+    }
+  });
+
+  function login(){
+    const email = document.getElementById('email').value.trim();
+    const pass  = document.getElementById('password').value;
+    auth.signInWithEmailAndPassword(email, pass)
+      .catch(err => showMsg(loginMsg, "Connexion refusée : " + err.message, false));
+  }
+  document.getElementById('loginBtn').addEventListener('click', login);
+  document.getElementById('password').addEventListener('keydown', e=>{ if(e.key === 'Enter') login(); });
+
+  document.getElementById('logoutBtn').addEventListener('click', ()=> auth.signOut());
+
+  /* ---------------- RECHERCHE PAR CODE ---------------- */
+  // Si le code change après une vérification, on invalide : impossible de créditer
+  // un ancien joueur par erreur.
+  codeInput.addEventListener('input', ()=>{
+    codeInput.value = codeInput.value.replace(/\D/g, '');
+    if(verified && verified.code !== codeInput.value) resetVerified();
+  });
+  codeInput.addEventListener('keydown', e=>{ if(e.key === 'Enter') lookupBtn.click(); });
+
+  lookupBtn.addEventListener('click', async ()=>{
+    const code = codeInput.value.trim();
+    adminMsg.className = 'msg';
+    if(!/^\d{6}$/.test(code)){
+      showMsg(adminMsg, "Le code doit contenir exactement 6 chiffres.", false);
+      return;
+    }
+    lookupBtn.disabled = true;
+    try{
+      // Le joueur est stocké dans players/{id} avec son code boutique et son solde
+      const snap = await db.collection('players').where('code', '==', code).limit(1).get();
+      if(snap.empty){
+        showMsg(adminMsg, "Aucun compte trouvé pour ce code.", false);
+        resetVerified();
+        return;
+      }
+      const doc = snap.docs[0];
+      const data = doc.data();
+      verified = { ref: doc.ref, code: code };
+      currentBalance.textContent = fmtN(data.solde);
+      playerPseudo.textContent = data.pseudo ? data.pseudo : 'Non renseigné';
+      balancePreview.classList.add('show');
+    } catch(err){
+      showMsg(adminMsg, "Erreur : " + err.message, false);
+    } finally {
+      lookupBtn.disabled = false;
+    }
+  });
+
+  /* ---------------- AJOUT / RETRAIT ---------------- */
+  function readAmount(){
+    if(!verified){
+      showMsg(adminMsg, "Vérifie d'abord un code boutique valide.", false);
+      return null;
+    }
+    const amount = parseInt(amountInput.value, 10);
+    if(!amount || amount <= 0){
+      showMsg(adminMsg, "Entre un montant valide.", false);
+      return null;
+    }
+    return amount;
+  }
+
+  async function refreshBalance(){
+    const snap = await verified.ref.get();
+    currentBalance.textContent = fmtN(snap.data().solde);
+  }
+
+  addBtn.addEventListener('click', async ()=>{
+    const amount = readAmount();
+    if(amount === null) return;
+    addBtn.disabled = removeBtn.disabled = true;
+    try{
+      await verified.ref.update({ solde: firebase.firestore.FieldValue.increment(amount) });
+      await refreshBalance();
+      showMsg(adminMsg, `${fmtN(amount)} Coins ajoutés au code ${verified.code}.`, true);
+      amountInput.value = '';
+    } catch(err){
+      showMsg(adminMsg, "Erreur lors de l'ajout : " + err.message, false);
+    } finally {
+      addBtn.disabled = removeBtn.disabled = false;
+    }
+  });
+
+  removeBtn.addEventListener('click', async ()=>{
+    const amount = readAmount();
+    if(amount === null) return;
+    addBtn.disabled = removeBtn.disabled = true;
+    try{
+      // Transaction : le solde est relu au moment du retrait, donc jamais négatif
+      // même si le joueur vient de miser.
+      const code = verified.code;
+      const result = await db.runTransaction(async tx=>{
+        const snap = await tx.get(verified.ref);
+        const current = (snap.data() && snap.data().solde) || 0;
+        if(amount > current) return { refused:true, current };
+        tx.update(verified.ref, { solde: firebase.firestore.FieldValue.increment(-amount) });
+        return { refused:false };
+      });
+      if(result.refused){
+        showMsg(adminMsg, `Retrait refusé : le solde actuel (${fmtN(result.current)}) est inférieur au montant demandé.`, false);
+        currentBalance.textContent = fmtN(result.current);
+        return;
+      }
+      await refreshBalance();
+      showMsg(adminMsg, `${fmtN(amount)} Coins retirés au code ${code}.`, true);
+      amountInput.value = '';
+    } catch(err){
+      showMsg(adminMsg, "Erreur lors du retrait : " + err.message, false);
+    } finally {
+      addBtn.disabled = removeBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
