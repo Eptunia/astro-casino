@@ -160,11 +160,11 @@
   /* ---- bandeau AstroCasino ---- */
   #astro-header{ position:relative; z-index:50; font-family:'Sora',sans-serif; color:#f7f0ff; }
   .astro-bar{
-    display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap;
+    display:flex; align-items:center; justify-content:center; gap:36px; flex-wrap:wrap;
     max-width:1240px; margin:0 auto; padding:22px 22px 18px;
   }
-  .astro-bar__brand{ display:flex; flex-direction:column; }
-  .astro-bar__cards{ display:flex; align-items:stretch; gap:14px; flex-wrap:wrap; }
+  .astro-bar__brand{ display:flex; flex-direction:column; align-items:center; }
+  .astro-bar__cards{ display:flex; align-items:stretch; justify-content:center; gap:14px; flex-wrap:wrap; }
   .astro-card{
     background:linear-gradient(180deg,#160d26,#120a1f);
     border:1px solid #2e1f4a; border-radius:14px;
@@ -199,10 +199,9 @@
   }
   .astro-pay:hover{ background:rgba(168,85,247,.16); color:#fff; }
   .astro-pay[aria-disabled="true"]{ opacity:.45; cursor:not-allowed; }
-  .astro-id{ max-width:1240px; margin:0 auto; padding:0 22px 10px; font-size:10px; color:#4e4270; letter-spacing:.3px; }
+  .astro-id{ max-width:1240px; margin:0 auto; padding:0 22px 10px; font-size:10px; color:#4e4270; letter-spacing:.3px; text-align:center; }
   @media(max-width:760px){
-    .astro-bar{ justify-content:center; text-align:center; }
-    .astro-bar__brand{ align-items:center; }
+    .astro-bar{ gap:20px; text-align:center; }
     .astro-card{ min-width:130px; }
   }
 </style>
