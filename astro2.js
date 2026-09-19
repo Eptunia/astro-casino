@@ -1,6 +1,6 @@
 /* ============================================================
    AstroCasino — astro2.js
-   Système d'identité unique + solde partagé (Firebase) + bandeau de marque.
+   Compte joueur (pseudo unique + ID + solde, synchronisés via Firestore) + bandeau de marque.
    À inclure sur TOUTES les pages :  <script src="astro2.js"></script>
    ============================================================ */
 (function () {
@@ -13,23 +13,22 @@
     nom:        'AstroCasino',
     sousTitre:  'ASTRO RP',
     devise:     'Coins',
-    soldeDepart: 82200,          // solde offert à un nouveau joueur
+    soldeDepart: 0,              // solde d'un nouveau joueur
     paypal:     '',              // ex: 'https://paypal.me/tonpseudo' — vide = bouton désactivé
-    cle:        'astro_account', // clé localStorage (cache local)
+    cle:        'astro_compte_v2', // clé localStorage (compte du joueur sur cet appareil)
 
     // Firebase : colle ici la config de ton app web
     // (console Firebase > Paramètres du projet > Tes applications > </> Web).
     // Tant que apiKey est vide, le site marche en mode local (localStorage seul).
-       firebase: {
-      apiKey: "AIzaSyA6OyTtCp_D8mv0AiA2owoyf0xqAvVytjE",
-      authDomain: "astrocasino-26c30.firebaseapp.com",
-      projectId: "astrocasino-26c30",
-      storageBucket: "astrocasino-26c30.firebasestorage.app",
+    firebase: {
+      apiKey:            "AIzaSyA6OyTtCp_D8mv0AiA2owoyf0xqAvVytjE",
+      authDomain:        "astrocasino-26c30.firebaseapp.com",
+      projectId:         "astrocasino-26c30",
+      storageBucket:     "astrocasino-26c30.firebasestorage.app",
       messagingSenderId: "658583796337",
-      appId: "1:658583796337:web:c7186c05d46daf9f8239d0"
+      appId:             "1:658583796337:web:c7186c05d46daf9f8239d0"
     }
   };
-
 
   // ----------------------------------------------------------
   // 1. IDENTITÉ UNIQUE
@@ -54,7 +53,9 @@
     const id = uuid();
     return {
       id: id,
-      code: codeDepuisId(id),
+      code: codeDepuisId(id),   // provisoire : le vrai code unique est attribué à l'inscription
+      pseudo: '',
+      enregistre: false,        // devient true après le choix du pseudo
       solde: CONFIG.soldeDepart,
       cree: new Date().toISOString(),
       vu: new Date().toISOString()
@@ -67,6 +68,8 @@
     if (!c || !c.id) c = creerCompte();
     if (typeof c.solde !== 'number' || !isFinite(c.solde)) c.solde = CONFIG.soldeDepart;
     if (!c.code) c.code = codeDepuisId(c.id);
+    if (typeof c.pseudo !== 'string') c.pseudo = '';
+    c.enregistre = !!(c.enregistre && c.pseudo);
     c.vu = new Date().toISOString();
     return c;
   }
@@ -92,7 +95,7 @@
   //   - le solde s'actualise en direct si l'admin le modifie
   // ----------------------------------------------------------
   const FB_VERSION = '10.12.2';
-  let fbRef = null, fbUnsub = null;
+  let fbDb = null, fbRef = null, fbUnsub = null;
   let deltaEnAttente = 0, timerEnvoi = null;
 
   function chargerScript(src) {
@@ -108,48 +111,213 @@
     return !!(f && f.apiKey && f.projectId);
   }
 
+  async function fbInit() {
+    if (fbDb) return fbDb;
+    if (!window.firebase) {
+      const base = 'https://www.gstatic.com/firebasejs/' + FB_VERSION + '/';
+      await chargerScript(base + 'firebase-app-compat.js');
+      await chargerScript(base + 'firebase-firestore-compat.js');
+    }
+    if (!firebase.apps.length) firebase.initializeApp(CONFIG.firebase);
+    fbDb = firebase.firestore();
+    return fbDb;
+  }
+
+  // Branche le compte du joueur (players/{id}) : le solde se met à jour en direct.
+  async function attacher() {
+    const ref = fbDb.collection('players').doc(compte.id);
+    fbRef = ref;
+    if (fbUnsub) fbUnsub();
+    fbUnsub = ref.onSnapshot(s => {
+      if (!s.exists) { console.warn('[Astro] Compte introuvable dans la base.'); return; }
+      const d = s.data();
+      if (d.code)   compte.code   = d.code;
+      if (d.pseudo) compte.pseudo = d.pseudo;
+      if (typeof d.solde === 'number') compte.solde = Math.max(0, Math.round(d.solde + deltaEnAttente));
+      try { localStorage.setItem(CONFIG.cle, JSON.stringify(compte)); } catch (e) {}
+      emit();
+    }, err => console.warn('[Astro] Firestore :', err.code || err));
+    if (deltaEnAttente) planifierEnvoi();
+  }
+
+  // Au chargement : si le joueur est déjà inscrit sur cet appareil, on le reconnecte tout seul.
   async function demarrerFirebase() {
     if (!firebaseConfigure()) {
       console.info('[Astro] Firebase non configuré : mode local uniquement.');
       return;
     }
+    if (!compte.enregistre) return; // pas encore de pseudo : la fenêtre d'inscription s'en occupe
     try {
-      if (!window.firebase) {
-        const base = 'https://www.gstatic.com/firebasejs/' + FB_VERSION + '/';
-        await chargerScript(base + 'firebase-app-compat.js');
-        await chargerScript(base + 'firebase-firestore-compat.js');
-      }
-      if (!firebase.apps.length) firebase.initializeApp(CONFIG.firebase);
-
-      const db  = firebase.firestore();
-      const ref = db.collection('players').doc(compte.id);
-      const snap = await ref.get();
-
-      if (!snap.exists) {
-        // Première fois : on crée le compte (reprend le solde local existant)
-        await ref.set({
-          id: compte.id, code: compte.code, solde: compte.solde, cree: compte.cree,
-          vu: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        deltaEnAttente = 0;
-      }
-
-      fbRef = ref;
-      if (fbUnsub) fbUnsub();
-      fbUnsub = ref.onSnapshot(s => {
-        if (!s.exists) return;
-        const d = s.data();
-        if (d.id)   compte.id   = d.id;
-        if (d.code) compte.code = d.code;
-        if (typeof d.solde === 'number') compte.solde = Math.max(0, Math.round(d.solde + deltaEnAttente));
-        try { localStorage.setItem(CONFIG.cle, JSON.stringify(compte)); } catch (e) {}
-        emit();
-      }, err => console.warn('[Astro] Firestore :', err.code || err));
-
-      if (deltaEnAttente) planifierEnvoi();
+      await fbInit();
+      await attacher();
     } catch (e) {
       console.warn('[Astro] Firebase indisponible, mode local :', e);
     }
+  }
+
+  // ----------------------------------------------------------
+  // 1c. INSCRIPTION (pseudo unique) + reconnexion par ID
+  // ----------------------------------------------------------
+  const RE_PSEUDO = /^[A-Za-z0-9_\- ]{3,16}$/;
+
+  function codeAleatoire() {
+    const b = new Uint32Array(1);
+    crypto.getRandomValues(b);
+    return String(b[0] % 1000000).padStart(6, '0');
+  }
+
+  async function inscrire(pseudoBrut) {
+    const pseudo = String(pseudoBrut || '').trim().replace(/\s+/g, ' ');
+    if (!RE_PSEUDO.test(pseudo)) {
+      return { ok: false, erreur: 'Pseudo invalide : 3 à 16 caractères (lettres, chiffres, espace, _ ou -).' };
+    }
+    // Sans Firebase : compte local uniquement
+    if (!firebaseConfigure()) {
+      compte.pseudo = pseudo; compte.enregistre = true; compte.solde = CONFIG.soldeDepart;
+      sauver();
+      return { ok: true };
+    }
+    try {
+      const db  = await fbInit();
+      const cle = pseudo.toLowerCase();
+      const pseudos = db.collection('pseudos');
+      if ((await pseudos.doc(cle).get()).exists) return { ok: false, erreur: 'Ce pseudo est déjà pris.' };
+
+      for (let essai = 0; essai < 6; essai++) {
+        const code = codeAleatoire();
+        if ((await db.collection('codes').doc(code).get()).exists) continue; // code déjà attribué
+        const maintenant = new Date().toISOString();
+        const lot = db.batch();
+        lot.set(pseudos.doc(cle), { pseudo: pseudo, cree: maintenant });
+        lot.set(db.collection('codes').doc(code), { cree: maintenant });
+        lot.set(db.collection('players').doc(compte.id), {
+          id: compte.id, code: code, pseudo: pseudo, solde: 0, cree: maintenant,
+          vu: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        try {
+          await lot.commit();
+          compte.pseudo = pseudo; compte.code = code; compte.solde = 0;
+          compte.enregistre = true; deltaEnAttente = 0;
+          sauver();
+          await attacher();
+          return { ok: true };
+        } catch (e) {
+          // Quelqu'un vient peut-être de prendre ce pseudo au même moment
+          if ((await pseudos.doc(cle).get()).exists) return { ok: false, erreur: 'Ce pseudo est déjà pris.' };
+          if (e.code !== 'permission-denied') throw e;
+        }
+      }
+      return { ok: false, erreur: 'Réessaie dans un instant.' };
+    } catch (e) {
+      console.warn('[Astro] Inscription impossible :', e);
+      return { ok: false, erreur: 'Connexion à la base impossible. Réessaie.' };
+    }
+  }
+
+  // Nouvel appareil / cache vidé : on retrouve son compte avec son ID joueur.
+  async function connecterAvecId(idBrut) {
+    const id = String(idBrut || '').trim();
+    if (id.length < 10) return { ok: false, erreur: 'ID joueur invalide.' };
+    try {
+      const db = await fbInit();
+      const s  = await db.collection('players').doc(id).get();
+      const d  = s.exists ? s.data() : null;
+      if (!d || !d.pseudo) return { ok: false, erreur: 'ID joueur introuvable.' };
+      compte = {
+        id: d.id, code: d.code, pseudo: d.pseudo, enregistre: true,
+        solde: typeof d.solde === 'number' ? d.solde : 0,
+        cree: d.cree || new Date().toISOString(), vu: new Date().toISOString()
+      };
+      deltaEnAttente = 0;
+      sauver();
+      await attacher();
+      return { ok: true };
+    } catch (e) {
+      console.warn('[Astro] Connexion impossible :', e);
+      return { ok: false, erreur: 'Connexion à la base impossible. Réessaie.' };
+    }
+  }
+
+  // ----- Fenêtre d'inscription -----
+  const CSS_MODAL = `
+  #astro-modal{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;
+    padding:20px;background:rgba(8,4,18,.92);backdrop-filter:blur(6px);
+    font-family:'Sora',-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;color:#f7f0ff;}
+  #astro-modal [hidden]{display:none !important;}
+  #astro-modal .am-card{width:100%;max-width:420px;background:linear-gradient(180deg,#1a0f30,#120a1f);
+    border:1px solid #4a2f70;border-radius:20px;padding:28px 26px;box-shadow:0 30px 80px -20px rgba(168,85,247,.45);}
+  #astro-modal .am-logo{font-size:30px;font-weight:800;letter-spacing:-.5px;margin-bottom:14px;font-family:'Poppins','Sora',sans-serif;}
+  #astro-modal .am-logo .a{background:linear-gradient(90deg,#a855f7,#e879f9);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  #astro-modal h3{font-size:19px;margin:0 0 8px;color:#ffe9a8;}
+  #astro-modal p{font-size:13px;line-height:1.5;color:#b7a3d6;margin:0 0 16px;}
+  #astro-modal input{width:100%;box-sizing:border-box;padding:13px 14px;border-radius:11px;border:1px solid #3a2a5c;
+    background:#0e0819;color:#fff;font-size:15px;outline:none;font-family:inherit;}
+  #astro-modal input:focus{border-color:#a855f7;}
+  #astro-modal .am-hint{font-size:11px;color:#6f5f8c;margin:7px 0 0;}
+  #astro-modal .am-err{min-height:18px;font-size:12.5px;color:#ff7a90;margin:10px 0 4px;}
+  #astro-modal button{width:100%;margin-top:6px;padding:13px;border:0;border-radius:11px;cursor:pointer;
+    font-size:14px;font-weight:800;color:#2a1a00;background:linear-gradient(180deg,#ffe9a8,#ffd76a);font-family:inherit;}
+  #astro-modal button:disabled{opacity:.55;cursor:wait;}
+  #astro-modal a{display:block;text-align:center;margin-top:14px;font-size:12.5px;color:#c084fc;cursor:pointer;text-decoration:underline;}`;
+
+  function montrerModal() {
+    if (document.getElementById('astro-modal') || !document.body) return;
+    if (!document.getElementById('astro-modal-css')) {
+      const st = document.createElement('style');
+      st.id = 'astro-modal-css'; st.textContent = CSS_MODAL;
+      document.head.appendChild(st);
+    }
+    const peutRetrouver = firebaseConfigure();
+    const m = document.createElement('div');
+    m.id = 'astro-modal';
+    m.innerHTML = `
+      <div class="am-card">
+        <div class="am-logo"><span class="a">Astro</span>Casino</div>
+        <div id="am-new">
+          <h3>Bienvenue !</h3>
+          <p>Choisis ton pseudo. Il est unique et lié à ton compte : ton solde, ton code et ton ID joueur ne changeront jamais. La prochaine fois, tu seras reconnecté automatiquement.</p>
+          <input id="am-pseudo" maxlength="16" placeholder="Ton pseudo" autocomplete="off" spellcheck="false">
+          <div class="am-hint">3 à 16 caractères : lettres, chiffres, espace, _ ou -</div>
+          <div class="am-err" id="am-err-new"></div>
+          <button id="am-go" type="button">Créer mon compte</button>
+          ${peutRetrouver ? '<a id="am-to-old">J\'ai déjà un compte (retrouver avec mon ID joueur)</a>' : ''}
+        </div>
+        <div id="am-old" hidden>
+          <h3>Retrouver mon compte</h3>
+          <p>Colle ton ID joueur (affiché sous le bandeau du casino sur ton autre appareil).</p>
+          <input id="am-id" placeholder="ID joueur" autocomplete="off" spellcheck="false">
+          <div class="am-err" id="am-err-old"></div>
+          <button id="am-login" type="button">Me connecter</button>
+          <a id="am-to-new">Retour</a>
+        </div>
+      </div>`;
+    document.body.appendChild(m);
+
+    const $ = id => document.getElementById(id);
+    const bascule = vieux => { $('am-new').hidden = vieux; $('am-old').hidden = !vieux; };
+    if ($('am-to-old')) $('am-to-old').onclick = () => bascule(true);
+    $('am-to-new').onclick = () => bascule(false);
+
+    async function lancer(bouton, erreurEl, action) {
+      bouton.disabled = true; erreurEl.textContent = '';
+      const r = await action();
+      bouton.disabled = false;
+      if (r.ok) verifierInscription(); else erreurEl.textContent = r.erreur;
+    }
+    $('am-go').onclick    = () => lancer($('am-go'), $('am-err-new'), () => inscrire($('am-pseudo').value));
+    $('am-login').onclick = () => lancer($('am-login'), $('am-err-old'), () => connecterAvecId($('am-id').value));
+    $('am-pseudo').addEventListener('keydown', e => { if (e.key === 'Enter') $('am-go').click(); });
+    $('am-id').addEventListener('keydown', e => { if (e.key === 'Enter') $('am-login').click(); });
+    setTimeout(() => { try { $('am-pseudo').focus(); } catch (e) {} }, 50);
+  }
+
+  function fermerModal() {
+    const m = document.getElementById('astro-modal');
+    if (m) m.remove();
+  }
+
+  function verifierInscription() {
+    if (compte.enregistre) fermerModal(); else montrerModal();
   }
 
   function planifierEnvoi() {
@@ -180,6 +348,8 @@
   const Astro = {
     get id()    { return compte.id; },
     get code()  { return compte.code; },
+    get pseudo()     { return compte.pseudo; },
+    get enregistre() { return compte.enregistre; },
     get solde() { return compte.solde; },
     config: CONFIG,
 
@@ -209,15 +379,6 @@
     /** Appelée à chaque changement de solde : Astro.onChange(s => ...) */
     onChange(fn) { abonnes.push(fn); fn(compte.solde, compte); },
 
-    /** Remet le compte à zéro (nouvel ID). */
-    reset() {
-      compte = creerCompte(); deltaEnAttente = 0; sauver();
-      if (fbUnsub) { fbUnsub(); fbUnsub = null; }
-      fbRef = null;
-      if (firebaseConfigure()) demarrerFirebase();
-      return compte;
-    },
-
     /** Vrai quand le compte est synchronisé avec Firebase. */
     get synchro() { return !!fbRef; },
 
@@ -228,7 +389,11 @@
   // Synchronisation entre onglets
   window.addEventListener('storage', e => {
     if (e.key === CONFIG.cle && e.newValue) {
-      try { compte = JSON.parse(e.newValue); emit(); } catch (err) {}
+      try {
+        compte = JSON.parse(e.newValue); emit();
+        verifierInscription();
+        if (compte.enregistre && !fbRef) demarrerFirebase();
+      } catch (err) {}
     }
   });
 
@@ -374,7 +539,20 @@
     const c = document.getElementById('astro-code');
     if (c) c.textContent = compte.code;
     const i = document.getElementById('astro-id');
-    if (i) i.textContent = compte.id;
+    if (i) i.textContent = compte.enregistre ? compte.id : '';
+    const p = document.getElementById('astro-pseudo');
+    if (p) p.textContent = compte.pseudo || '—';
+  }
+
+  function ajouterCartePseudo() {
+    if (document.getElementById('astro-pseudo')) return;
+    const cartes = document.querySelector('.astro-bar__cards');
+    if (!cartes) return;
+    const c = document.createElement('div');
+    c.className = 'astro-card';
+    c.innerHTML = '<div class="astro-card__label">Joueur</div>' +
+                  '<div class="astro-solde"><b id="astro-pseudo" style="font-size:19px">—</b></div>';
+    cartes.insertBefore(c, cartes.firstChild);
   }
 
   function monter() {
@@ -414,7 +592,9 @@
         ta.remove(); done();
       }
     });
+    ajouterCartePseudo();
     majBandeau();
+    verifierInscription();
   }
 
   sauver(); // enregistre le compte dès la 1re visite

@@ -2,23 +2,49 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Pas de connexion : l'ID aléatoire du joueur (UUID) sert de clé du document.
+    // Comptes joueurs : la clé du document est l'ID joueur (UUID aléatoire, généré une seule fois).
     match /players/{id} {
-      // On peut lire un compte si on connaît son ID, mais pas lister tous les comptes.
+      // On lit un compte seulement si on connaît son ID ; impossible de lister tous les comptes.
       allow get: if true;
       allow list: if false;
 
+      // Création : solde obligatoirement à 0, et le pseudo + le code doivent être réservés dans le même lot.
       allow create: if request.resource.data.id == id
-        && request.resource.data.keys().hasOnly(['id', 'code', 'solde', 'cree', 'vu'])
-        && request.resource.data.solde is number
-        && request.resource.data.solde >= 0;
+        && request.resource.data.keys().hasOnly(['id', 'code', 'pseudo', 'solde', 'cree', 'vu'])
+        && request.resource.data.solde == 0
+        && request.resource.data.pseudo is string
+        && request.resource.data.pseudo.matches('^[A-Za-z0-9_ -]{3,16}$')
+        && request.resource.data.code is string
+        && request.resource.data.code.matches('^[0-9]{6}$')
+        && existsAfter(/databases/$(database)/documents/pseudos/$(request.resource.data.pseudo.lower()))
+        && existsAfter(/databases/$(database)/documents/codes/$(request.resource.data.code));
 
-      // Seuls le solde et la date de dernière visite peuvent changer.
+      // Ensuite, seuls le solde et la date de dernière visite peuvent changer (id, code, pseudo verrouillés).
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['solde', 'vu'])
         && request.resource.data.solde is number
         && request.resource.data.solde >= 0;
 
       allow delete: if false;
+    }
+
+    // Pseudos réservés : un pseudo pris ne peut plus être créé ni modifié (unicité).
+    match /pseudos/{cle} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.resource.data.keys().hasOnly(['pseudo', 'cree'])
+        && request.resource.data.pseudo is string
+        && cle == request.resource.data.pseudo.lower()
+        && cle.matches('^[a-z0-9_ -]{3,16}$');
+      allow update, delete: if false;
+    }
+
+    // Codes boutique à 6 chiffres : un code attribué ne peut plus être réutilisé.
+    match /codes/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if code.matches('^[0-9]{6}$')
+        && request.resource.data.keys().hasOnly(['cree']);
+      allow update, delete: if false;
     }
   }
 }
