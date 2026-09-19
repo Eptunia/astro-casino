@@ -2,18 +2,19 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Un joueur ne peut lire / modifier que SON propre compte.
-    match /players/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
+    // Pas de connexion : l'ID aléatoire du joueur (UUID) sert de clé du document.
+    match /players/{id} {
+      // On peut lire un compte si on connaît son ID, mais pas lister tous les comptes.
+      allow get: if true;
+      allow list: if false;
 
-      allow create: if request.auth != null && request.auth.uid == uid
+      allow create: if request.resource.data.id == id
         && request.resource.data.keys().hasOnly(['id', 'code', 'solde', 'cree', 'vu'])
         && request.resource.data.solde is number
         && request.resource.data.solde >= 0;
 
-      // Seuls le solde et la date de dernière visite peuvent changer (id et code sont verrouillés).
-      allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['solde', 'vu'])
+      // Seuls le solde et la date de dernière visite peuvent changer.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['solde', 'vu'])
         && request.resource.data.solde is number
         && request.resource.data.solde >= 0;
 

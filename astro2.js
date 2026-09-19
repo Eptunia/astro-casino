@@ -20,15 +20,16 @@
     // Firebase : colle ici la config de ton app web
     // (console Firebase > Paramètres du projet > Tes applications > </> Web).
     // Tant que apiKey est vide, le site marche en mode local (localStorage seul).
-    firebase: {
-      apiKey:            '',
-      authDomain:        '',
-      projectId:         '',
-      storageBucket:     '',
-      messagingSenderId: '',
-      appId:             ''
+       firebase: {
+      apiKey: "AIzaSyA6OyTtCp_D8mv0AiA2owoyf0xqAvVytjE",
+      authDomain: "astrocasino-26c30.firebaseapp.com",
+      projectId: "astrocasino-26c30",
+      storageBucket: "astrocasino-26c30.firebasestorage.app",
+      messagingSenderId: "658583796337",
+      appId: "1:658583796337:web:c7186c05d46daf9f8239d0"
     }
   };
+
 
   // ----------------------------------------------------------
   // 1. IDENTITÉ UNIQUE
@@ -83,15 +84,15 @@
   function fmt(n) { return Math.round(n).toLocaleString('fr-FR'); }
 
   // ----------------------------------------------------------
-  // 1b. SYNCHRO FIREBASE (Auth anonyme + Firestore)
-  //   - le joueur est connecté anonymement (aucun mot de passe)
-  //   - son compte est stocké dans Firestore : players/{uid}
+  // 1b. SYNCHRO FIREBASE (Firestore uniquement, SANS connexion)
+  //   - aucune authentification : l'ID aléatoire du joueur sert de clé
+  //   - son compte est stocké dans Firestore : players/{id}
   //   - les changements de solde sont envoyés en "incrément" (+/-),
   //     donc un crédit fait par l'admin dans la console n'est jamais écrasé
   //   - le solde s'actualise en direct si l'admin le modifie
   // ----------------------------------------------------------
   const FB_VERSION = '10.12.2';
-  let fbAuth = null, fbRef = null, fbUnsub = null;
+  let fbRef = null, fbUnsub = null;
   let deltaEnAttente = 0, timerEnvoi = null;
 
   function chargerScript(src) {
@@ -116,20 +117,12 @@
       if (!window.firebase) {
         const base = 'https://www.gstatic.com/firebasejs/' + FB_VERSION + '/';
         await chargerScript(base + 'firebase-app-compat.js');
-        await Promise.all([
-          chargerScript(base + 'firebase-auth-compat.js'),
-          chargerScript(base + 'firebase-firestore-compat.js')
-        ]);
+        await chargerScript(base + 'firebase-firestore-compat.js');
       }
       if (!firebase.apps.length) firebase.initializeApp(CONFIG.firebase);
-      fbAuth = firebase.auth();
-
-      // Attend que Firebase restaure la session éventuelle, sinon connexion anonyme
-      await new Promise(res => { const off = fbAuth.onAuthStateChanged(u => { off(); res(u); }); });
-      if (!fbAuth.currentUser) await fbAuth.signInAnonymously();
 
       const db  = firebase.firestore();
-      const ref = db.collection('players').doc(fbAuth.currentUser.uid);
+      const ref = db.collection('players').doc(compte.id);
       const snap = await ref.get();
 
       if (!snap.exists) {
@@ -219,11 +212,9 @@
     /** Remet le compte à zéro (nouvel ID). */
     reset() {
       compte = creerCompte(); deltaEnAttente = 0; sauver();
-      if (fbAuth) {
-        if (fbUnsub) { fbUnsub(); fbUnsub = null; }
-        fbRef = null;
-        fbAuth.signOut().then(demarrerFirebase).catch(() => {});
-      }
+      if (fbUnsub) { fbUnsub(); fbUnsub = null; }
+      fbRef = null;
+      if (firebaseConfigure()) demarrerFirebase();
       return compte;
     },
 
